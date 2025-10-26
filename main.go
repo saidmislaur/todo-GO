@@ -92,7 +92,7 @@ func (tm *TaskManager) addTask() {
 }
 
 func (tm *TaskManager) deleteTask() {
-	fmt.Println("Введите номер задачи для удаления: ")
+	fmt.Println("Введите номер для удаления: ")
 	text, _ := tm.Reader.ReadString('\n')
 	text = strings.TrimSpace(text)
 
