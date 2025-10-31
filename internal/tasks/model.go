@@ -8,6 +8,7 @@ type Task struct {
 }
 
 type TaskManager struct {
-	Tasks  []Task
-	Reader *bufio.Reader
+	Tasks    []Task
+	Reader   *bufio.Reader
+	FilePath string
 }

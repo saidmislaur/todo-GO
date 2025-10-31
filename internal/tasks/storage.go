@@ -2,26 +2,33 @@ package tasks
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 )
 
-func (tm *TaskManager) SaveTasks() {
-	file, err := os.Create("tasks.json")
+func (tm *TaskManager) SaveTasks() error {
+	file, err := os.Create(tm.FilePath)
 	if err != nil {
-		log.Fatalf("%v", file)
+		return fmt.Errorf("ошибка при чтении файла: %w", err)
 	}
 
-	json.NewEncoder(file).Encode(tm.Tasks)
+	if err := json.NewEncoder(file).Encode(tm.Tasks); err != nil {
+		return fmt.Errorf("ошибка записи JSON: %w", err)
+	}
+
+	return nil
 }
 
-func (tm *TaskManager) LoadTasks() {
-	file, err := os.Open("tasks.json")
+func (tm *TaskManager) LoadTasks() error {
+	file, err := os.Open(tm.FilePath)
 	if err != nil {
-		log.Fatalf("Файл задач не найден, создаю новый")
-		return
+		return fmt.Errorf("ошибка открытия файла: %w", err)
 	}
 	defer file.Close()
 
-	json.NewDecoder(file).Decode(&tm.Tasks)
+	if err := json.NewDecoder(file).Decode(&tm.Tasks); err != nil {
+		return fmt.Errorf("ошибка декодирования JSON: %w", err)
+	}
+
+	return nil
 }

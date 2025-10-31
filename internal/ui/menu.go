@@ -5,6 +5,14 @@ import (
 	"fmt"
 )
 
+const (
+	MenuShowTasks  = "1"
+	MenuAddTask    = "2"
+	MenuDeleteTask = "3"
+	MenuUpdateTask = "4"
+	MenuExit       = "5"
+)
+
 func Run(tm *tasks.TaskManager) bool {
 	for {
 		fmt.Println("Выберите действие:")
@@ -18,15 +26,22 @@ func Run(tm *tasks.TaskManager) bool {
 		fmt.Scan(&choice)
 
 		switch choice {
-		case "1":
+		case MenuShowTasks:
 			tm.ShowTasks()
-		case "2":
-			tm.AddTask()
-		case "3":
-			tm.DeleteTask()
-		case "4":
-			tm.UpdateTask()
-		case "5":
+		case MenuAddTask:
+			if err := tm.AddTask(); err != nil {
+				fmt.Println("Ошибка:", err)
+			}
+		case MenuDeleteTask:
+			if err := tm.DeleteTask(); err != nil {
+				fmt.Println("Ошибка:", err)
+			}
+		case MenuUpdateTask:
+			if err := tm.UpdateTask(); err != nil {
+				fmt.Println("Ошибка:", err)
+			}
+		case MenuExit:
+			fmt.Println("Выход из программы...")
 			return false
 		default:
 			fmt.Println("Неверный выбор")
