@@ -23,7 +23,7 @@ func (tm *TaskManager) ShowTasks() {
 	}
 	fmt.Println("\nСписок задач:")
 	for _, task := range tm.Tasks {
-		fmt.Printf("%d. %s\n", task.ID, task.Text)
+		fmt.Printf("%d. %s – [%v]\n", task.ID, task.Text, task.Status)
 	}
 	fmt.Println()
 }
@@ -32,16 +32,20 @@ func (tm *TaskManager) AddTask() error {
 	fmt.Println("Введите новую задачу: ")
 	text, err := tm.Reader.ReadString('\n')
 	if err != nil {
-		log.Fatalf("%v", err)
+		fmt.Printf("%v", err)
 	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return fmt.Errorf("текст задачи не может быть пустым")
 	}
 
+	fmt.Println("статус задачи по умолчанию: in_process")
+	status := "in_process"
+
 	newTask := Task{
-		ID:   rand.Intn(1000),
-		Text: text,
+		ID:     rand.Intn(1000),
+		Text:   text,
+		Status: status,
 	}
 
 	tm.Tasks = append(tm.Tasks, newTask)
@@ -75,7 +79,7 @@ func (tm *TaskManager) DeleteTask() error {
 	}
 
 	if num == -1 {
-		return fmt.Errorf("Такой задачи не существует", id)
+		fmt.Println("Такой задачи не существует:", id)
 	}
 
 	deleted := tm.Tasks[num]
@@ -112,21 +116,52 @@ func (tm *TaskManager) UpdateTask() error {
 	}
 
 	if num == -1 {
-		fmt.Println("Такой задачи не существует")
+		return fmt.Errorf("задача с ID %d не существует", id)
+
 	}
 
-	fmt.Println("Введите новый текст")
-	newText, err := tm.Reader.ReadString('\n')
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	newText = strings.TrimSpace(newText)
+	fmt.Println("1. Редактировать текст")
+	fmt.Println("2. Редактировать статус")
+	fmt.Println("3. Отмена")
 
-	tm.Tasks[num].Text = newText
-	if err := tm.SaveTasks(); err != nil {
-		return fmt.Errorf("ошибка сохранения изменений: %w", err)
+	var variant string
+	if _, err := fmt.Scan(&variant); err != nil {
+		return fmt.Errorf("ошибка чтения варианта: %w", err)
 	}
-	fmt.Println("Задача успешно обновлена ✅")
 
+	switch variant {
+	case "1":
+		fmt.Println("Введите новый текст")
+		newText, err := tm.Reader.ReadString('\n')
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+
+		newText = strings.TrimSpace(newText)
+
+		tm.Tasks[num].Text = newText
+		if err := tm.SaveTasks(); err != nil {
+			return fmt.Errorf("ошибка сохранения изменений: %w", err)
+		}
+
+		fmt.Println("Задача успешно обновлена ✅")
+
+	case "2":
+		fmt.Println("Обновите статус задачи: done / in_process / not_completed")
+		status, err := tm.Reader.ReadString('\n')
+		if err != nil {
+			fmt.Println(err)
+		}
+		status = strings.TrimSpace(status)
+		if status == "" && status != "done" && status != "in_process" && status != "not_completed" {
+			return fmt.Errorf("недопустимый статус: %q", status)
+		}
+
+		tm.Tasks[num].Status = status
+
+		fmt.Printf("Статус задачи %v изменён на %v ✅", tm.Tasks[num].Text, status)
+	case "3":
+		break
+	}
 	return nil
 }
