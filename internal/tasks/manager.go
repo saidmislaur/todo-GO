@@ -3,11 +3,16 @@ package tasks
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+)
+
+const (
+	StatusDone         = "done"
+	StatusInProcess    = "in_process"
+	StatusNotCompleted = "not_completed"
 )
 
 func NewManager(filePath string) *TaskManager {
@@ -61,13 +66,13 @@ func (tm *TaskManager) DeleteTask() error {
 	fmt.Println("Введите номер для удаления: ")
 	text, err := tm.Reader.ReadString('\n')
 	if err != nil {
-		log.Fatalf("%v", err)
+		return fmt.Errorf("ошибка чтения ввода: %w", err)
 	}
 	text = strings.TrimSpace(text)
 
 	id, err := strconv.Atoi(text)
 	if err != nil {
-		log.Fatalf("%v", err)
+		return fmt.Errorf("ошибка чтения ввода: %w", err)
 	}
 
 	num := -1
@@ -79,7 +84,7 @@ func (tm *TaskManager) DeleteTask() error {
 	}
 
 	if num == -1 {
-		fmt.Println("Такой задачи не существует:", id)
+		return fmt.Errorf("задача с id %d не найдена", id)
 	}
 
 	deleted := tm.Tasks[num]
@@ -90,20 +95,20 @@ func (tm *TaskManager) DeleteTask() error {
 
 	fmt.Println("Удалена задача:", deleted.Text)
 
-	return err
+	return nil
 }
 
 func (tm *TaskManager) UpdateTask() error {
 	fmt.Println("Введите номер задачи, которую хотите редактировать")
 	text, err := tm.Reader.ReadString('\n')
 	if err != nil {
-		log.Fatalf("%v", err)
+		return fmt.Errorf("ошибка чтения ввода: %w", err)
 	}
 	text = strings.TrimSpace(text)
 
 	id, err := strconv.Atoi(text)
 	if err != nil {
-		log.Fatalf("%v", err)
+		return fmt.Errorf("ошибка чтения ввода: %w", err)
 	}
 
 	num := -1
@@ -117,7 +122,6 @@ func (tm *TaskManager) UpdateTask() error {
 
 	if num == -1 {
 		return fmt.Errorf("задача с ID %d не существует", id)
-
 	}
 
 	fmt.Println("1. Редактировать текст")
@@ -134,10 +138,14 @@ func (tm *TaskManager) UpdateTask() error {
 		fmt.Println("Введите новый текст")
 		newText, err := tm.Reader.ReadString('\n')
 		if err != nil {
-			log.Fatalf("%v", err)
+			return fmt.Errorf("ошибка чтения ввода: %w", err)
 		}
 
 		newText = strings.TrimSpace(newText)
+
+		if newText == "" {
+			return fmt.Errorf("текст задачи не может быть пустым")
+		}
 
 		tm.Tasks[num].Text = newText
 		if err := tm.SaveTasks(); err != nil {
@@ -153,7 +161,7 @@ func (tm *TaskManager) UpdateTask() error {
 			fmt.Println(err)
 		}
 		status = strings.TrimSpace(status)
-		if status == "" && status != "done" && status != "in_process" && status != "not_completed" {
+		if status == "" || (status != StatusDone && status != StatusInProcess && status != StatusNotCompleted) {
 			return fmt.Errorf("недопустимый статус: %q", status)
 		}
 
