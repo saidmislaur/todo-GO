@@ -18,7 +18,7 @@ func main() {
 	http.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			w.Header().Set("Сontent-Type", "application/json")
+			w.Header().Set("Сontent-Type ", "application/json")
 			json.NewEncoder(w).Encode(manager.Tasks)
 
 		case http.MethodPost:
@@ -39,7 +39,7 @@ func main() {
 				return
 			}
 
-			w.Header().Set("Content-Type", "aplication/json")
+			w.Header().Set("Content-Type ", "aplication/json")
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(createdTask)
 
@@ -68,7 +68,7 @@ func main() {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type ", "application/json")
 			json.NewEncoder(w).Encode(task)
 
 		case http.MethodDelete:
