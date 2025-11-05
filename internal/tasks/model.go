@@ -9,7 +9,7 @@ type Task struct {
 }
 
 type TaskManager struct {
-	Tasks    []Task
+	Tasks    map[int]Task
 	Reader   *bufio.Reader
 	FilePath string
 }

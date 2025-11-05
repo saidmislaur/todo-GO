@@ -3,7 +3,6 @@ package tasks
 import (
 	"bufio"
 	"fmt"
-	"math/rand"
 	"os"
 )
 
@@ -13,6 +12,12 @@ const (
 	StatusNotCompleted = "not_completed"
 )
 
+var validStatuses = map[string]bool{
+	StatusDone:         true,
+	StatusInProcess:    true,
+	StatusNotCompleted: true,
+}
+
 func NewManager(filePath string) *TaskManager {
 	return &TaskManager{
 		Reader:   bufio.NewReader(os.Stdin),
@@ -21,15 +26,26 @@ func NewManager(filePath string) *TaskManager {
 }
 
 func (tm *TaskManager) AddTask(text string) (Task, error) {
-	newTask := Task{
-		ID:     rand.Intn(1000),
-		Text:   text,
-		Status: "in_process",
+	newID := 1
+	if len(tm.Tasks) > 0 {
+		for id := range tm.Tasks {
+			if id >= newID {
+				newID = id + 1
+			}
+		}
 	}
 
-	tm.Tasks = append(tm.Tasks, newTask)
+	newTask := Task{
+		ID:     newID,
+		Text:   text,
+		Status: StatusInProcess,
+	}
+
+	tm.Tasks[newID] = newTask
+
 	if err := tm.SaveTasks(); err != nil {
-		return Task{}, fmt.Errorf("ошибка при добавлении: %w", err)
+		delete(tm.Tasks, newID) // откат
+		return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
 	}
 	fmt.Println("Задача добавлена ✅")
 
@@ -37,58 +53,44 @@ func (tm *TaskManager) AddTask(text string) (Task, error) {
 }
 
 func (tm *TaskManager) UpdateTask(id int, updated Task) (Task, error) {
-	for i, task := range tm.Tasks {
-		if task.ID == id {
-			if updated.Text != "" {
-				tm.Tasks[i].Text = updated.Text
-			}
-
-			if updated.Status != "" {
-				allowedStatuses := []string{StatusDone, StatusInProcess, StatusNotCompleted}
-				valid := false
-				for _, s := range allowedStatuses {
-					if updated.Status == s {
-						valid = true
-						break
-					}
-				}
-				if !valid {
-					return Task{}, fmt.Errorf("недопустимый статус: %s", updated.Status)
-				}
-				tm.Tasks[i].Status = updated.Status
-			}
-			if err := tm.SaveTasks(); err != nil {
-				return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
-			}
-
-			return tm.Tasks[i], nil
-		}
+	task, exists := tm.Tasks[id]
+	if !exists {
+		return Task{}, fmt.Errorf("задача с ID %d не найдена", id)
 	}
 
-	return Task{}, fmt.Errorf("задача с ID %d не найдена", id)
+	if updated.Text != "" {
+		task.Text = updated.Text
+	}
+
+	if updated.Status != "" {
+		if !validStatuses[updated.Status] {
+			return Task{}, fmt.Errorf("недопустимый статус: %s", updated.Status)
+		}
+		task.Status = updated.Status
+	}
+
+	tm.Tasks[id] = task
+
+	if err := tm.SaveTasks(); err != nil {
+		return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
+	}
+
+	return task, nil
 }
 
 func (tm *TaskManager) DeleteTask(id int) error {
-	num := -1
-
-	for i, task := range tm.Tasks {
-		if task.ID == id {
-			num = i
-			break
-		}
-	}
-
-	if num == -1 {
+	task, exists := tm.Tasks[id]
+	if !exists {
 		return fmt.Errorf("задача с id %d не найдена", id)
 	}
 
-	deleted := tm.Tasks[num]
-	tm.Tasks = append(tm.Tasks[:num], tm.Tasks[num+1:]...)
+	delete(tm.Tasks, id)
+
 	if err := tm.SaveTasks(); err != nil {
 		return fmt.Errorf("ошибка при сохранении после удаления: %w", err)
 	}
 
-	fmt.Println("Удалена задача:", deleted.Text)
+	fmt.Println("Удалена задача:", task.Text)
 
 	return nil
 }
