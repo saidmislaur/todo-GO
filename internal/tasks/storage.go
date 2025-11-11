@@ -2,32 +2,41 @@ package tasks
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 )
 
 func (tm *TaskManager) SaveTasks() error {
-	file, err := os.Create(tm.FilePath)
+	var tasks []Task
+	for _, task := range tm.Tasks {
+		tasks = append(tasks, task)
+	}
+
+	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
-		return fmt.Errorf("ошибка при чтении файла: %w", err)
+		return err
 	}
 
-	if err := json.NewEncoder(file).Encode(tm.Tasks); err != nil {
-		return fmt.Errorf("ошибка записи JSON: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(tm.FilePath, data, 0644)
 }
 
 func (tm *TaskManager) LoadTasks() error {
-	file, err := os.Open(tm.FilePath)
+	data, err := os.ReadFile(tm.FilePath)
 	if err != nil {
-		return fmt.Errorf("ошибка открытия файла: %w", err)
+		if os.IsNotExist(err) {
+			tm.Tasks = make(map[int]Task)
+			return nil
+		}
+		return err
 	}
-	defer file.Close()
 
-	if err := json.NewDecoder(file).Decode(&tm.Tasks); err != nil {
-		return fmt.Errorf("ошибка декодирования JSON: %w", err)
+	var tasks []Task
+	if err := json.Unmarshal(data, &tasks); err != nil {
+		return err
+	}
+
+	tm.Tasks = make(map[int]Task)
+	for _, task := range tasks {
+		tm.Tasks[task.ID] = task
 	}
 
 	return nil

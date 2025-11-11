@@ -3,10 +3,7 @@ package tasks
 import (
 	"bufio"
 	"fmt"
-	"math/rand"
 	"os"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -15,6 +12,12 @@ const (
 	StatusNotCompleted = "not_completed"
 )
 
+var validStatuses = map[string]bool{
+	StatusDone:         true,
+	StatusInProcess:    true,
+	StatusNotCompleted: true,
+}
+
 func NewManager(filePath string) *TaskManager {
 	return &TaskManager{
 		Reader:   bufio.NewReader(os.Stdin),
@@ -22,154 +25,83 @@ func NewManager(filePath string) *TaskManager {
 	}
 }
 
-func (tm *TaskManager) ShowTasks() {
-	if len(tm.Tasks) == 0 {
-		fmt.Println("Список задач пуст!")
-	}
-	fmt.Println("\nСписок задач:")
-	for _, task := range tm.Tasks {
-		fmt.Printf("%d. %s – [%v]\n", task.ID, task.Text, task.Status)
-	}
-	fmt.Println()
-}
-
-func (tm *TaskManager) AddTask() error {
-	fmt.Println("Введите новую задачу: ")
-	text, err := tm.Reader.ReadString('\n')
-	if err != nil {
-		fmt.Printf("%v", err)
-	}
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return fmt.Errorf("текст задачи не может быть пустым")
-	}
-
-	fmt.Println("статус задачи по умолчанию: in_process")
-	status := "in_process"
-
-	newTask := Task{
-		ID:     rand.Intn(1000),
-		Text:   text,
-		Status: status,
-	}
-
-	tm.Tasks = append(tm.Tasks, newTask)
-	if err := tm.SaveTasks(); err != nil {
-		return fmt.Errorf("ошибка при добавлении задачи %w", err)
-	}
-	fmt.Println("Задача добавлена ✅")
-
-	return nil
-}
-
-func (tm *TaskManager) DeleteTask() error {
-	fmt.Println("Введите номер для удаления: ")
-	text, err := tm.Reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("ошибка чтения ввода: %w", err)
-	}
-	text = strings.TrimSpace(text)
-
-	id, err := strconv.Atoi(text)
-	if err != nil {
-		return fmt.Errorf("ошибка чтения ввода: %w", err)
-	}
-
-	num := -1
-
-	for i, task := range tm.Tasks {
-		if task.ID == id {
-			num = i
+func (tm *TaskManager) AddTask(userId int, text string) (Task, error) {
+	newID := 1
+	if len(tm.Tasks) > 0 {
+		for id := range tm.Tasks {
+			if id >= newID {
+				newID = id + 1
+			}
 		}
 	}
 
-	if num == -1 {
+	newTask := Task{
+		ID:     newID,
+		Text:   text,
+		Status: StatusInProcess,
+		UserId: userId,
+	}
+
+	tm.Tasks[newID] = newTask
+
+	if err := tm.SaveTasks(); err != nil {
+		delete(tm.Tasks, newID) // откат
+		return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
+	}
+	fmt.Println("Задача добавлена ✅")
+
+	return newTask, nil
+}
+
+func (tm *TaskManager) GetTasksByUser(userID int) []Task {
+	var userTasks []Task
+	for _, t := range tm.Tasks {
+		if t.UserId == userID {
+			userTasks = append(userTasks, t)
+		}
+	}
+	return userTasks
+}
+
+func (tm *TaskManager) UpdateTask(id int, updated Task) (Task, error) {
+	task, exists := tm.Tasks[id]
+	if !exists {
+		return Task{}, fmt.Errorf("задача с ID %d не найдена", id)
+	}
+
+	if updated.Text != "" {
+		task.Text = updated.Text
+	}
+
+	if updated.Status != "" {
+		if !validStatuses[updated.Status] {
+			return Task{}, fmt.Errorf("недопустимый статус: %s", updated.Status)
+		}
+		task.Status = updated.Status
+	}
+
+	tm.Tasks[id] = task
+
+	if err := tm.SaveTasks(); err != nil {
+		return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
+	}
+
+	return task, nil
+}
+
+func (tm *TaskManager) DeleteTask(id int) error {
+	task, exists := tm.Tasks[id]
+	if !exists {
 		return fmt.Errorf("задача с id %d не найдена", id)
 	}
 
-	deleted := tm.Tasks[num]
-	tm.Tasks = append(tm.Tasks[:num], tm.Tasks[num+1:]...)
+	delete(tm.Tasks, id)
+
 	if err := tm.SaveTasks(); err != nil {
 		return fmt.Errorf("ошибка при сохранении после удаления: %w", err)
 	}
 
-	fmt.Println("Удалена задача:", deleted.Text)
+	fmt.Println("Удалена задача:", task.Text)
 
-	return nil
-}
-
-func (tm *TaskManager) UpdateTask() error {
-	fmt.Println("Введите номер задачи, которую хотите редактировать")
-	text, err := tm.Reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("ошибка чтения ввода: %w", err)
-	}
-	text = strings.TrimSpace(text)
-
-	id, err := strconv.Atoi(text)
-	if err != nil {
-		return fmt.Errorf("ошибка чтения ввода: %w", err)
-	}
-
-	num := -1
-
-	for i, task := range tm.Tasks {
-		if task.ID == id {
-			num = i
-			break
-		}
-	}
-
-	if num == -1 {
-		return fmt.Errorf("задача с ID %d не существует", id)
-	}
-
-	fmt.Println("1. Редактировать текст")
-	fmt.Println("2. Редактировать статус")
-	fmt.Println("3. Отмена")
-
-	var variant string
-	if _, err := fmt.Scan(&variant); err != nil {
-		return fmt.Errorf("ошибка чтения варианта: %w", err)
-	}
-
-	switch variant {
-	case "1":
-		fmt.Println("Введите новый текст")
-		newText, err := tm.Reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("ошибка чтения ввода: %w", err)
-		}
-
-		newText = strings.TrimSpace(newText)
-
-		if newText == "" {
-			return fmt.Errorf("текст задачи не может быть пустым")
-		}
-
-		tm.Tasks[num].Text = newText
-		if err := tm.SaveTasks(); err != nil {
-			return fmt.Errorf("ошибка сохранения изменений: %w", err)
-		}
-
-		fmt.Println("Задача успешно обновлена ✅")
-
-	case "2":
-		fmt.Println("Обновите статус задачи: done / in_process / not_completed")
-		status, err := tm.Reader.ReadString('\n')
-		if err != nil {
-			fmt.Println(err)
-		}
-		status = strings.TrimSpace(status)
-		if status == "" || (status != StatusDone && status != StatusInProcess && status != StatusNotCompleted) {
-			return fmt.Errorf("недопустимый статус: %q", status)
-		}
-
-		tm.Tasks[num].Status = status
-
-		fmt.Printf("Статус задачи %v изменён на %v ✅", tm.Tasks[num].Text, status)
-	case "3":
-		break
-	}
 	return nil
 }
