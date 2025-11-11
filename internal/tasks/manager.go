@@ -25,7 +25,7 @@ func NewManager(filePath string) *TaskManager {
 	}
 }
 
-func (tm *TaskManager) AddTask(text string) (Task, error) {
+func (tm *TaskManager) AddTask(userId int, text string) (Task, error) {
 	newID := 1
 	if len(tm.Tasks) > 0 {
 		for id := range tm.Tasks {
@@ -39,6 +39,7 @@ func (tm *TaskManager) AddTask(text string) (Task, error) {
 		ID:     newID,
 		Text:   text,
 		Status: StatusInProcess,
+		UserId: userId,
 	}
 
 	tm.Tasks[newID] = newTask
@@ -50,6 +51,16 @@ func (tm *TaskManager) AddTask(text string) (Task, error) {
 	fmt.Println("Задача добавлена ✅")
 
 	return newTask, nil
+}
+
+func (tm *TaskManager) GetTasksByUser(userID int) []Task {
+	var userTasks []Task
+	for _, t := range tm.Tasks {
+		if t.UserId == userID {
+			userTasks = append(userTasks, t)
+		}
+	}
+	return userTasks
 }
 
 func (tm *TaskManager) UpdateTask(id int, updated Task) (Task, error) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"demo/app/internal/tasks"
+	"demo/app/internal/users"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,12 +15,65 @@ func main() {
 	if err := manager.LoadTasks(); err != nil {
 		fmt.Println("ошибка загрузки задач")
 	}
+	userManager := users.NewManager("users.json")
+	if err := userManager.LoadUsers(); err != nil {
+		fmt.Println("ошибка загрузки пользователей")
+	}
+
+	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var newUser users.User
+		if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
+			http.Error(w, "Неверный формат JSON", http.StatusBadRequest)
+			return
+		}
+		if err := userManager.Register(newUser.Username, newUser.Password); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+	})
+
+	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var user users.User
+		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+			http.Error(w, "Неверный формат JSON", http.StatusBadRequest)
+			return
+		}
+
+		token, err := userManager.Login(user.Username, user.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{"token": token})
+	})
 
 	http.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, "Требуется авторизация", http.StatusUnauthorized)
+			return
+		}
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		userId, err := userManager.GetUserIDByToken(token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodGet:
 			w.Header().Set("Сontent-Type ", "application/json")
-			json.NewEncoder(w).Encode(manager.Tasks)
+			json.NewEncoder(w).Encode(manager.GetTasksByUser(userId))
 
 		case http.MethodPost:
 			var newTask tasks.Task
@@ -33,7 +87,7 @@ func main() {
 				return
 			}
 
-			createdTask, err := manager.AddTask(newTask.Text)
+			createdTask, err := manager.AddTask(userId, newTask.Text)
 			if err != nil {
 				http.Error(w, "ошибка при сохранении задачи", http.StatusInternalServerError)
 				return

@@ -1,37 +1,26 @@
 [
   {
-    "id": 76,
-    "text": "залить на гитхаб",
-    "status": "in_process"
+    "id": 1,
+    "text": "купить молоко",
+    "status": "in_process",
+    "user_id": 1
   },
   {
-    "id": 317,
-    "text": "тестовый формат данных",
-    "status": "in_process"
+    "id": 2,
+    "text": "почитай книгу",
+    "status": "in_process",
+    "user_id": 1
   },
   {
-    "id": 481,
-    "text": "проверка функционала",
-    "status": "done"
+    "id": 3,
+    "text": "залить все на гитхаб",
+    "status": "in_process",
+    "user_id": 2
   },
   {
-    "id": 992,
-    "text": "залить на гитхаб",
-    "status": "in_process"
-  },
-  {
-    "id": 661,
-    "text": "проверить работу сервера",
-    "status": "in_process"
-  },
-  {
-    "id": 993,
-    "text": "залить на гитхаб",
-    "status": "in_process"
-  },
-  {
-    "id": 994,
-    "text": "рефакторинг кода",
-    "status": "done"
+    "id": 4,
+    "text": "проверить связь между юзером и задачей",
+    "status": "in_process",
+    "user_id": 1
   }
 ]
