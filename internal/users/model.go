@@ -1,6 +1,6 @@
 package users
 
-import "bufio"
+import "database/sql"
 
 type User struct {
 	ID       int    `json:"id"`
@@ -9,8 +9,6 @@ type User struct {
 }
 
 type UserManager struct {
-	Users    map[int]User
-	Reader   *bufio.Reader
-	FilePath string
+	DB       *sql.DB
 	Sessions map[string]int
 }

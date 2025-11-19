@@ -1,9 +1,9 @@
 package tasks
 
 import (
-	"bufio"
+	"database/sql"
+	"errors"
 	"fmt"
-	"os"
 )
 
 const (
@@ -18,90 +18,110 @@ var validStatuses = map[string]bool{
 	StatusNotCompleted: true,
 }
 
-func NewManager(filePath string) *TaskManager {
-	return &TaskManager{
-		Reader:   bufio.NewReader(os.Stdin),
-		FilePath: filePath,
-	}
+func NewManager(db *sql.DB) *TaskManager {
+	return &TaskManager{DB: db}
 }
 
 func (tm *TaskManager) AddTask(userId int, text string) (Task, error) {
-	newID := 1
-	if len(tm.Tasks) > 0 {
-		for id := range tm.Tasks {
-			if id >= newID {
-				newID = id + 1
-			}
-		}
+	if text == "" {
+		return Task{}, errors.New("текст задачи не может быть пустым")
 	}
 
-	newTask := Task{
-		ID:     newID,
-		Text:   text,
-		Status: StatusInProcess,
-		UserId: userId,
-	}
+	var task Task
+	err := tm.DB.QueryRow(`
+		INSERT INTO tasks (user_id, text, status)
+		VALUES ($1, $2, $3)
+		RETURNING id, user_id, text, status
+	`, userId, text, StatusInProcess).Scan(
+		&task.ID, &task.UserId, &task.Text, &task.Status,
+	)
 
-	tm.Tasks[newID] = newTask
-
-	if err := tm.SaveTasks(); err != nil {
-		delete(tm.Tasks, newID) // откат
-		return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
-	}
-	fmt.Println("Задача добавлена ✅")
-
-	return newTask, nil
-}
-
-func (tm *TaskManager) GetTasksByUser(userID int) []Task {
-	var userTasks []Task
-	for _, t := range tm.Tasks {
-		if t.UserId == userID {
-			userTasks = append(userTasks, t)
-		}
-	}
-	return userTasks
-}
-
-func (tm *TaskManager) UpdateTask(id int, updated Task) (Task, error) {
-	task, exists := tm.Tasks[id]
-	if !exists {
-		return Task{}, fmt.Errorf("задача с ID %d не найдена", id)
-	}
-
-	if updated.Text != "" {
-		task.Text = updated.Text
-	}
-
-	if updated.Status != "" {
-		if !validStatuses[updated.Status] {
-			return Task{}, fmt.Errorf("недопустимый статус: %s", updated.Status)
-		}
-		task.Status = updated.Status
-	}
-
-	tm.Tasks[id] = task
-
-	if err := tm.SaveTasks(); err != nil {
-		return Task{}, fmt.Errorf("ошибка сохранения: %w", err)
+	if err != nil {
+		return Task{}, fmt.Errorf("ошибка создания задачи: %w", err)
 	}
 
 	return task, nil
 }
 
+func (tm *TaskManager) GetTasksByUser(userId int) ([]Task, error) {
+	rows, err := tm.DB.Query(`
+		SELECT id, user_id, text, status
+		FROM tasks
+		WHERE user_id = $1
+	`, userId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasksList []Task
+	for rows.Next() {
+		var t Task
+		if err := rows.Scan(&t.ID, &t.UserId, &t.Text, &t.Status); err != nil {
+			return nil, err
+		}
+		tasksList = append(tasksList, t)
+	}
+
+	return tasksList, nil
+}
+
+func (tm *TaskManager) UpdateTask(id int, updated Task) (Task, error) {
+	var existing Task
+	err := tm.DB.QueryRow(`
+		SELECT id, user_id, text, status
+		FROM tasks
+		WHERE id = $1
+	`, id).Scan(&existing.ID, &existing.UserId, &existing.Text, &existing.Status)
+
+	if err == sql.ErrNoRows {
+		return Task{}, fmt.Errorf("задача с id %d не найдена", id)
+	}
+	if err != nil {
+		return Task{}, err
+	}
+
+	// если пришёл новый текст
+	newText := existing.Text
+	if updated.Text != "" {
+		newText = updated.Text
+	}
+
+	// если пришёл новый статус
+	newStatus := existing.Status
+	if updated.Status != "" {
+		if !validStatuses[updated.Status] {
+			return Task{}, fmt.Errorf("недопустимый статус: %s", updated.Status)
+		}
+		newStatus = updated.Status
+	}
+
+	// выполняем обновление
+	err = tm.DB.QueryRow(`
+		UPDATE tasks
+		SET text = $1, status = $2
+		WHERE id = $3
+		RETURNING id, user_id, text, status
+	`, newText, newStatus, id).Scan(
+		&existing.ID, &existing.UserId, &existing.Text, &existing.Status,
+	)
+	if err != nil {
+		return Task{}, err
+	}
+
+	return existing, nil
+}
+
 func (tm *TaskManager) DeleteTask(id int) error {
-	task, exists := tm.Tasks[id]
-	if !exists {
+	res, err := tm.DB.Exec(`DELETE FROM tasks WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
 		return fmt.Errorf("задача с id %d не найдена", id)
 	}
-
-	delete(tm.Tasks, id)
-
-	if err := tm.SaveTasks(); err != nil {
-		return fmt.Errorf("ошибка при сохранении после удаления: %w", err)
-	}
-
-	fmt.Println("Удалена задача:", task.Text)
 
 	return nil
 }

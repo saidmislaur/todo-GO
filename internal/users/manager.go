@@ -1,67 +1,78 @@
 package users
 
 import (
-	"bufio"
+	"database/sql"
 	"errors"
 	"fmt"
-	"os"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-func NewManager(filePath string) *UserManager {
+func NewManager(db *sql.DB) *UserManager {
 	return &UserManager{
-		Reader:   bufio.NewReader(os.Stdin),
-		FilePath: filePath,
+		DB:       db,
 		Sessions: make(map[string]int),
 	}
 }
 
 func (um *UserManager) Register(username, password string) error {
-	for _, u := range um.Users {
-		if u.Username == username {
-			return fmt.Errorf("пользователь %q уже существует", username)
-		}
+	var existingID int
+	err := um.DB.QueryRow("SELECT id FROM users WHERE username=$1", username).Scan(&existingID)
+	if err == nil {
+		return fmt.Errorf("пользователь %q уже существует", username)
+	}
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("ошибка проверки пользователя: %v", err)
 	}
 
-	newID := 1
-	if len(um.Users) > 0 {
-		for id := range um.Users {
-			if id >= newID {
-				newID = id + 1
-			}
-		}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("ошибка хэширования пароля: %v", err)
 	}
 
-	newUser := User{
-		ID:       newID,
-		Username: username,
-		Password: password,
-	}
-
-	um.Users[newID] = newUser
-
-	if err := um.SaveUsers(); err != nil {
-		return fmt.Errorf("ошибка сохранения пользователя %v", err)
+	_, err = um.DB.Exec(
+		"INSERT INTO users (username, password_hash) VALUES ($1, $2)",
+		username, string(hash),
+	)
+	if err != nil {
+		return fmt.Errorf("ошибка создания пользователя: %v", err)
 	}
 
 	return nil
 }
 
 func (um *UserManager) Login(username, password string) (string, error) {
-	for _, user := range um.Users {
-		if user.Username == username && user.Password == password {
-			token := fmt.Sprintf("%s-%d", username, user.ID)
-			um.Sessions[token] = user.ID
-			return token, nil
-		}
+	var id int
+	var storedHash string
+
+	err := um.DB.QueryRow(
+		"SELECT id, password_hash FROM users WHERE username=$1",
+		username,
+	).Scan(&id, &storedHash)
+
+	if err == sql.ErrNoRows {
+		return "", errors.New("неверный логин или пароль")
+	}
+	if err != nil {
+		return "", fmt.Errorf("ошибка чтения пользователя: %v", err)
 	}
 
-	return "", fmt.Errorf("неверный логин или пароль")
+	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password))
+	if err != nil {
+		return "", errors.New("неверный логин или пароль")
+	}
+
+	token := fmt.Sprintf("token-%d-%s", id, username)
+
+	um.Sessions[token] = id
+
+	return token, nil
 }
 
 func (um *UserManager) GetUserIDByToken(token string) (int, error) {
-	id, ok := um.Sessions[token]
+	userID, ok := um.Sessions[token]
 	if !ok {
 		return 0, errors.New("неверный или просроченный токен")
 	}
-	return id, nil
+	return userID, nil
 }

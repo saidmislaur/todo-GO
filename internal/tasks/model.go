@@ -1,6 +1,6 @@
 package tasks
 
-import "bufio"
+import "database/sql"
 
 type Task struct {
 	ID     int    `json:"id"`
@@ -10,7 +10,5 @@ type Task struct {
 }
 
 type TaskManager struct {
-	Tasks    map[int]Task
-	Reader   *bufio.Reader
-	FilePath string
+	DB *sql.DB
 }
